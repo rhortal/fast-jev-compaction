@@ -57,6 +57,11 @@
       "title": "Jev model",
       "description": "TypeSafe Jev model name.",
       "default": "jev-latest"
+    },
+    "baseUrl": {
+      "type": "string",
+      "title": "Jev endpoint URL",
+      "description": "Override the System One endpoint (e.g. to route through an OpenRouter-compatible gateway). Leave unset to use TYPESAFE_BASE_URL or the default TypeSafe endpoint."
     }
   }
 }

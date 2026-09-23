@@ -45,6 +45,7 @@ export type HookConfig = CompactOptions & {
   compactAtPercent: number;
   minReductionRatio: number;
   model: string;
+  baseUrl?: string;
 };
 
 function optionNumber(options: PluginOptions, key: string, fallback: number): number {
@@ -84,14 +85,21 @@ export function resolveHookConfig(options: PluginOptions): HookConfig {
   if (apiKey) config.apiKey = apiKey;
   const goal = optionString(options, 'goal');
   if (goal) config.goal = goal;
+  const baseUrl = optionString(options, 'baseUrl');
+  if (baseUrl) config.baseUrl = baseUrl;
   return config;
 }
 
 /** A `JevAsker` over the engine's `$.http.fetch`. */
-export function jevAsker(fetchFn: HookFetch, apiKey: string, model: string): JevAsker {
+export function jevAsker(
+  fetchFn: HookFetch,
+  apiKey: string,
+  model: string,
+  baseUrl?: string,
+): JevAsker {
   return {
     async ask(state, questions) {
-      const request = buildJevRequest({ apiKey, model }, state, questions);
+      const request = buildJevRequest({ apiKey, model, baseUrl }, state, questions);
       const response = await fetchFn(request.url, {
         method: request.method,
         headers: request.headers,
@@ -168,7 +176,11 @@ export async function compactSession(
   fetchFn: HookFetch,
 ): Promise<SessionCompaction> {
   if (!config.apiKey) throw new Error('TYPESAFE_API_KEY is not configured');
-  const result = await compact(messages, jevAsker(fetchFn, config.apiKey, config.model), config);
+  const result = await compact(
+    messages,
+    jevAsker(fetchFn, config.apiKey, config.model, config.baseUrl),
+    config,
+  );
   return { result, messages: toSessionMessages(messages, result.messages) };
 }
 
@@ -240,7 +252,54 @@ async function getApiKey(
     const value = (env as Record<string, unknown>)['TYPESAFE_API_KEY'];
     if (typeof value === 'string' && value) return value;
   }
+  // Falls back to OPENROUTER_API_KEY so the plugin can be pointed at an
+  // OpenRouter-compatible baseUrl without duplicating the key under a
+  // second name.
+  const fromOpenRouterEnv = await $.env.get('OPENROUTER_API_KEY');
+  if (fromOpenRouterEnv) return fromOpenRouterEnv;
+  if (env && typeof env === 'object') {
+    const value = (env as Record<string, unknown>)['OPENROUTER_API_KEY'];
+    if (typeof value === 'string' && value) return value;
+  }
   return undefined;
+}
+
+async function getBaseUrl(
+  $: {
+    env: { get: (name: string) => Promise<string | undefined> };
+    settings: { read: () => Promise<Readonly<Record<string, unknown>>> };
+  },
+  config: HookConfig,
+): Promise<string | undefined> {
+  if (config.baseUrl) return config.baseUrl;
+  const fromEnv = await $.env.get('TYPESAFE_BASE_URL');
+  if (fromEnv) return fromEnv;
+  const settings = await $.settings.read();
+  const env = settings['env'];
+  if (env && typeof env === 'object') {
+    const value = (env as Record<string, unknown>)['TYPESAFE_BASE_URL'];
+    if (typeof value === 'string' && value) return value;
+  }
+  return undefined;
+}
+
+async function getModel(
+  $: {
+    env: { get: (name: string) => Promise<string | undefined> };
+    settings: { read: () => Promise<Readonly<Record<string, unknown>>> };
+  },
+  config: HookConfig,
+): Promise<string> {
+  if (config.model !== HOOK_DEFAULTS.model) return config.model;
+  const fromEnv = await $.env.get('TYPESAFE_MODEL');
+  if (fromEnv) return fromEnv;
+  const settings = await $.settings.read();
+  const env = settings['env'];
+  if (env && typeof env === 'object') {
+    const value = (env as Record<string, unknown>)['TYPESAFE_MODEL'];
+    if (typeof value === 'string' && value) return value;
+  }
+  return config.model;
 }
 
 function notify(
@@ -262,7 +321,12 @@ export const register: Register = (on: On, options: PluginOptions) => {
 
   on('session.compact', async ($, event, next) => {
     try {
-      const config = { ...configured, apiKey: await getApiKey($, configured) };
+      const config = {
+        ...configured,
+        apiKey: await getApiKey($, configured),
+        baseUrl: await getBaseUrl($, configured),
+        model: await getModel($, configured),
+      };
       const { result, messages } = await compactSession(event.messages, config, async (url, init) => {
         const response = await $.http.fetch(url, init);
         return { status: response.status, ok: response.ok, text: response.text };
