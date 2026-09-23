@@ -100,9 +100,9 @@ put it in a source file.
 
 | Option | Default | Description |
 | --- | --- | --- |
-| `apiKey` | `TYPESAFE_API_KEY` | TypeSafe API key (`compactMessages`/`JevClient`) |
-| `model` | `jev-latest` | Jev model name |
-| `baseUrl` | `https://api.typesafe.ai/v1/systemone` | System One endpoint |
+| `apiKey` | `TYPESAFE_API_KEY` (falls back to `OPENROUTER_API_KEY`) | TypeSafe API key (`compactMessages`/`JevClient`) |
+| `model` | `jev-latest` (or `TYPESAFE_MODEL`) | Jev model name |
+| `baseUrl` | `https://api.typesafe.ai/v1/systemone` (or `TYPESAFE_BASE_URL`) | System One endpoint |
 | `fetch` | native `fetch` | Injectable fetch implementation for tests |
 | `goal` | last 3 user prompts | Ongoing task description included in the state |
 | `keepThreshold` | `0.5` | Minimum keep probability for a call or result to stay |
@@ -157,6 +157,45 @@ auto-compaction) goes through Jev: the toast reads
 `fast-jev-compaction: kept N/M messages, no summary (…)` when the pruned history
 replaced the built-in summary, or `fallback to built-in summary (…)` when Jev
 could not remove enough (short sessions, or when it fails).
+
+### Using OpenRouter instead of the TypeSafe API
+
+This fork adds a configurable `baseUrl` (plus env-var fallbacks) so Jev
+requests can go through an OpenRouter-compatible endpoint instead of
+`api.typesafe.ai` directly, reusing an existing `OPENROUTER_API_KEY` instead
+of provisioning a separate TypeSafe key.
+
+1. Add this fork (not upstream) as the marketplace source:
+
+   ```sh
+   claude plugin marketplace add rhortal/fast-jev-compaction
+   claude plugin install fast-jev-compaction@fast-jev-compaction
+   ```
+
+   If upstream's `tamaratran/fast-jev-compaction` is already added, remove it
+   first (`claude plugin marketplace remove fast-jev-compaction`) so the
+   fork's OpenRouter wiring isn't overwritten by an upstream update later.
+
+2. Set these in `~/.claude/settings.json` (`env` block) — no separate
+   `TYPESAFE_API_KEY` is needed, the key falls back to `OPENROUTER_API_KEY`:
+
+   ```json
+   {
+     "env": {
+       "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS": "1",
+       "OPENROUTER_API_KEY": "<your existing OpenRouter key>",
+       "TYPESAFE_BASE_URL": "https://openrouter.ai/api/alpha/decisions",
+       "TYPESAFE_MODEL": "~typesafe/jev-latest"
+     }
+   }
+   ```
+
+3. Restart Claude Code or run `/reload-plugins`.
+
+Resolution order for each value: explicit plugin option (set at install time)
+> the env var above > built-in default. Since the plugin install prompt asks
+for `apiKey`/`model`/`baseUrl` directly, leave those blank at install time so
+the env vars above take effect instead.
 
 To run from a checkout without installing: `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude --plugin-dir .`
 from the repository root. No publishing step is required; the marketplace is

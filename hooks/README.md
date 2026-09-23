@@ -58,8 +58,11 @@ The plugin declares these `userConfig` values in
 | `model` | `jev-latest` |
 
 The TypeSafe key can be supplied as the sensitive `apiKey` plugin option or
-through `TYPESAFE_API_KEY`. The environment variable is the recommended
-development setup.
+through `TYPESAFE_API_KEY` (falling back to `OPENROUTER_API_KEY` if unset).
+The environment variable is the recommended development setup. `model` and
+`baseUrl` similarly fall back to `TYPESAFE_MODEL` and `TYPESAFE_BASE_URL` when
+not set as plugin options — see "Using OpenRouter instead of the TypeSafe API"
+in the root README for pointing this at an OpenRouter-compatible endpoint.
 
 Every option except `apiKey`, `compactAtPercent`, `minReductionRatio` and
 `model` is passed straight to the library; see the root README for what they
