@@ -5,6 +5,49 @@ every tool call and result is scored in one fast request, stale ones are
 dropped or truncated, everything kept stays verbatim. Also usable as an npm
 library.
 
+## For agents
+
+Paste this whole section to a Claude Code agent on a new machine to install
+and configure this fork for OpenRouter. Do not use `tamaratran/fast-jev-compaction`
+(upstream) — use this fork, `rhortal/fast-jev-compaction`, which has the
+`baseUrl`/OpenRouter wiring.
+
+1. If upstream is already added as a marketplace, remove it first so it can't
+   later overwrite this fork's config:
+   ```sh
+   claude plugin marketplace remove fast-jev-compaction 2>/dev/null || true
+   ```
+2. Add this fork and install the plugin:
+   ```sh
+   claude plugin marketplace add rhortal/fast-jev-compaction
+   claude plugin install fast-jev-compaction@fast-jev-compaction
+   ```
+   When the install prompts for plugin options (`apiKey`, `model`, `baseUrl`,
+   thresholds, …), leave them all blank/default — configuration is done via
+   env vars in step 3, not install-time options.
+3. Merge these into `~/.claude/settings.json`'s `"env"` block (create the file
+   if it doesn't exist; if `OPENROUTER_API_KEY` is already set elsewhere in
+   the environment, that's sufficient — don't duplicate it):
+   ```json
+   {
+     "env": {
+       "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS": "1",
+       "OPENROUTER_API_KEY": "<the user's OpenRouter key>",
+       "TYPESAFE_BASE_URL": "https://openrouter.ai/api/alpha/decisions",
+       "TYPESAFE_MODEL": "~typesafe/jev-latest"
+     }
+   }
+   ```
+4. Also set `"autoUpdate": false` for this marketplace in
+   `~/.claude/plugins/known_marketplaces.json` (under the `fast-jev-compaction`
+   entry) so a future update sweep can't silently repoint or overwrite it.
+5. Run `/reload-plugins` (or restart Claude Code).
+6. Verify: run `/compact` in a session with some history and confirm the
+   toast reads `fast-jev-compaction: kept N/M messages, no summary (…)` —
+   not an error about a missing key or endpoint. If it falls back to the
+   built-in summary, re-check that `OPENROUTER_API_KEY` is actually set in
+   the environment Claude Code runs in.
+
 ## What and why
 
 Most context compaction asks an LLM to summarize old turns. A summary is
